@@ -27,6 +27,7 @@ appended with provider suffix: e.g. `-google-oauth` or `-github-oauth`:
     root-url = "<cas url>"
     client-id = "<client-id>"
     client-secret = "<client-secret>"
+    use-json-extractor = false
 
   [plugin "@PLUGIN@-gitlab-oauth"]
     root-url = "<gitlab url>"
@@ -49,12 +50,6 @@ appended with provider suffix: e.g. `-google-oauth` or `-github-oauth`:
     client-secret = "<client-secret>"
     root-url = "<phabricator url>"
 
-  # The office365 has been renamed to azure and is deprecated.
-  [plugin "@PLUGIN@-office365-oauth"]
-    client-id = "<client-id>"
-    client-secret = "<client-secret>"
-    tenant = "<tenant (optional defaults to organizations if not set)>"
-
   [plugin "@PLUGIN@-azure-oauth"]
     client-id = "<client-id>"
     client-secret = "<client-secret>"
@@ -62,12 +57,43 @@ appended with provider suffix: e.g. `-google-oauth` or `-github-oauth`:
     link-to-existing-office365-accounts = true #Optional, if set will try to link old account with the @PLUGIN@-office365-oauth naming
 
   [plugin "@PLUGIN@-keycloak-oauth"]
-    root-url = "<root url>" # for example, https://signon.example.com
+    # Prior to Keycloak V17 /auth path must be added to the root-url, see this migration instruction:
+    # https://www.keycloak.org/migration/migrating-to-quarkus
+    root-url = "<root url>" # for example, https://signon.example.com, or https://signon.example.com/auth
     realm = "<realm>"
     client-id = "<client-id>"
     client-secret = "<client-secret>"
     use-preferred-username = true # Optional, if false will not send preferred_username from Keycloak to leave username unset
 
+  [plugin "@PLUGIN@-tuleap-oauth"]
+    service-name = "<custom service name (optional)>"
+    root-url = "<root url>" # for example, https://tuleap.example.com
+    client-id = "<client-id>"
+    client-secret = "<client-secret>"
+
+  [plugin "@PLUGIN@-auth0-oauth"]
+    root-url = "<root url>" # for example, https://dev-abc.us.auth0.com
+    client-id = "<client-id>"
+    client-secret = "<client-secret>"
+
+  [plugin "@PLUGIN@-authentik-oauth"]
+    root-url = "<root url>" # for example, https://authentik.example.com
+    client-id = "<client-id>"
+    client-secret = "<client-secret>"
+    link-to-existing-gerrit-accounts = false
+
+  [plugin "@PLUGIN@-cognito-oauth"]
+    root-url = "<root url>" # for example, https://cognito.example.com
+    client-id = "<client-id>"
+    client-secret = "<client-secret>"
+
+  [plugin "@PLUGIN@-sapias-oauth"]
+    root-url = "<root url>" # for example, https://sapias.example.com
+    client-id = "<client-id>"
+    client-secret = "<client-secret>"
+    link-to-existing-gerrit-accounts = false
+    enable-pkce = false
+    enable-resource-owner-password-flow = false
 ```
 
 When one from the sections above is omitted, OAuth SSO is used.
@@ -122,7 +148,8 @@ plugin.gerrit-oauth-provider-cas-oauth.root-url = "https://example.com/cas"
 
 is required, since CAS is a self-hosted application.
 
-Note that the CAS OAuth plugin only supports CAS V5 and higher.
+Note that the CAS OAuth plugin only supports CAS V5 and higher. Both plain text
+and JSON responses are supported (see configuration).
 
 The plugin expects CAS to make several attributes available to it:
 
@@ -243,6 +270,12 @@ The client-id and client-secret for Phabricator can be obtained by registering a
 Client application.
 See [Using the Phabricator OAuth Server](https://secure.phabricator.com/book/phabcontrib/article/using_oauthserver/).
 
+### Tuleap
+
+The client-id and client-secret for Tuleap can be obtained by registering a
+Client application.
+See [Registering a new application](https://docs.tuleap.org/user-guide/oauth2.html#client-registration).
+
 ### Azure (previously named Office365)
 Were previously named Office365 but both `plugin.gerrit-oauth-provider-azure-oauth` and
 `plugin.gerrit-oauth-provider-office365-oauth` is supported by the Azure OAuth.
@@ -292,3 +325,46 @@ The root URL will the protocol and hostname of your Keycloak instance (for examp
 
 You can optionally set `use-preferred-username = false` if you would prefer to not have the `preferred_username`
 token be automatically set as the users username, and instead let users choose their own usernames.
+
+### Authentik
+
+When setting up a Application in Authentik for Gerrit use the `OAuth2/OpenID Provider` type.
+
+You can optionally set `link-to-existing-gerrit-accounts = true` if you want the provider to link a account based
+on the username instead of trying to create a new account, see below migration from LDAP.
+
+### Cognito
+
+The client-id and secret-id can be obtained in the AWS Cognito web interface once you create a new App Integration for Gerrit.
+See [Creating an app integration](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-configuring-app-integration.html).
+
+You can optionally set `link-to-existing-gerrit-accounts = true` if you want the provider to link a account based
+on the username instead of trying to create a new account, see below migration from LDAP.
+
+#### Migrating from LDAP to Authentik/Cognito
+
+Set the `link-to-existing-gerrit-accounts = true` option.
+
+If you have used LDAP before and have accounts with an externalIDs like `gerrit:firstname.lastname` and a user in Authentik/Cognito
+with username `firstname.lastname` logs in it will link the Authentik/Cognito account to that Gerrit account.
+
+When all users has logged in once in Gerrit with their Authentik/Cognito account it's recommended that the configuration option is removed.
+
+### SAP IAS
+
+When setting up an Application  for Gerrit in SAP Cloud Identity Service follow
+["Configuring OpenID Connect"](https://help.sap.com/docs/cloud-identity-services/cloud-identity-services/openid-connect).
+For end user authentication follow
+["Using Authorization Code Flow"](https://help.sap.com/docs/cloud-identity-services/cloud-identity-services/using-authorization-code-flow).
+Then configure the URL of your IAS tenant and client-id and client-secret in gerrit.config.
+
+You can optionally set `link-to-existing-gerrit-accounts = true` if you want the provider to link a account based
+on the username instead of trying to create a new account, see migration from LDAP.
+
+You can optionally set `enable-pkce = true` if you want to use PKCE as part of the authorization workflow
+during login.
+
+If login via password for git over HTTp or REST API should still be possible, the Resource
+Owner Password Flow can optionally be enabled. This OAuth flow lets the user send the password
+and Gerrit will use that password to authenticate the user against the OAuth server. Note, that
+this flow is not considered to be secure. To enable this flow set `enable-resource-owner-password-flow = true`.
